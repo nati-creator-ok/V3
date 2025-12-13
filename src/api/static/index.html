@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Table Extraction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --blue-600: #0064ff;
+            --blue-500: #1a73e8;
+            --blue-100: #e5ecff;
+            --bg: #f5f7fa;
+            --text: #0a0a0a;
+            --muted: #5b6472;
+            --success: #23c552;
+            --error: #ff3b3b;
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at 10% 20%, #e5ecff 0, rgba(229,236,255,0) 35%),
+                                    radial-gradient(circle at 90% 10%, rgba(0,100,255,0.12) 0, rgba(0,100,255,0) 40%),
+                                    var(--bg);
+            color: var(--text);
+            padding: 28px 18px 48px;
+        }
+        .shell { max-width: 1180px; margin: 0 auto; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .logo { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--blue-600), var(--blue-500)); box-shadow: var(--shadow); display: grid; place-items: center; color: #fff; font-weight: 700; }
+        .title { font-size: 20px; font-weight: 700; }
+        .subtitle { color: var(--muted); font-size: 14px; }
+        .actions { display: flex; gap: 10px; }
+        button, .btn-link {
+            border: none; cursor: pointer; border-radius: 10px; padding: 12px 16px; font-weight: 600; font-size: 14px;
+            transition: transform 0.15s ease, box-shadow 0.2s ease;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--blue-600), var(--blue-500)); color: #fff; box-shadow: var(--shadow); }
+        .btn-ghost { background: #fff; color: var(--text); box-shadow: var(--shadow); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        button:hover:not(:disabled) { transform: translateY(-2px); }
+        .grid { display: grid; gap: 18px; }
+        .card { background: #fff; border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow); }
+        .card h3 { font-size: 16px; margin-bottom: 10px; }
+        .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--blue-100); color: var(--blue-600); font-weight: 600; font-size: 13px; }
+        .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 18px; }
+        .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 12px; margin-top: 12px; }
+        .stat { background: linear-gradient(135deg, var(--blue-600), var(--blue-500)); color: #fff; border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow); }
+        .stat label { font-size: 12px; opacity: 0.9; }
+        .stat strong { font-size: 22px; display: block; }
+        .upload-zone {
+            border: 2px dashed var(--blue-500); border-radius: var(--radius-md); padding: 22px; text-align: center; background: #f9fbff;
+            display: grid; gap: 8px; cursor: pointer; transition: border-color 0.2s ease, background 0.2s ease;
+        }
+        .upload-zone.drag { background: #eef3ff; border-color: var(--blue-600); }
+        .muted { color: var(--muted); font-size: 13px; }
+        .thumb { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; background: #f2f4f8; }
+        .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 10px; margin-top: 10px; }
+        .stage { border: 1px solid #e6e8ec; border-radius: var(--radius-md); padding: 12px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .stage .label { font-weight: 600; margin-bottom: 4px; }
+        .stage .status { font-size: 12px; color: var(--muted); }
+        .viewer { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 12px; }
+        .viewer .panel { border: 1px dashed #e6e8ec; border-radius: var(--radius-md); padding: 12px; min-height: 220px; background: #f9fafc; }
+        .panel h4 { margin-bottom: 6px; font-size: 14px; }
+        .table-wrap { overflow: auto; max-height: 360px; border: 1px solid #e6e8ec; border-radius: var(--radius-md); background: #fff; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #e6e8ec; padding: 8px 10px; text-align: left; }
+        th { background: #f3f6ff; }
+        .json-view { white-space: pre-wrap; font-family: "SFMono-Regular", Consolas, monospace; background: #0b1224; color: #e8ecf7; padding: 12px; border-radius: var(--radius-md); max-height: 360px; overflow: auto; }
+        .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 12px; }
+        .status-ok { background: rgba(35,197,82,0.12); color: #0f8a33; }
+        .status-warn { background: rgba(255,59,59,0.12); color: #b32020; }
+        .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 12px; }
+        .tabs { display: flex; gap: 8px; margin-top: 8px; }
+        .tab { padding: 8px 12px; border-radius: 10px; border: 1px solid #e6e8ec; background: #fff; cursor: pointer; font-weight: 600; font-size: 13px; }
+        .tab.active { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
+        .hidden { display: none !important; }
+        @media (max-width: 840px) { .hero { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header>
+            <div class="brand">
+                <div class="logo">AI</div>
+                <div>
+                    <div class="title">Table Extraction Studio</div>
+                    <div class="subtitle">Korean + English • Structure + OCR • Exports</div>
+                </div>
+            </div>
+            <div class="actions">
+                <a class="btn-link muted" href="/docs" target="_blank">API Docs</a>
+                <button class="btn-ghost" id="healthBtn">Check Health</button>
+                <button class="btn-primary" id="startBtn">Run Extraction</button>
+            </div>
+        </header>
+
+        <section class="grid hero">
+            <div class="card">
+                <div class="pill">Upload</div>
+                <h3 style="margin-top:8px;">Upload PDF or Image</h3>
+                <p class="muted" style="margin-top:6px;">Supported: PDF, PNG, JPG. Drag & drop or click.</p>
+                <div id="uploadZone" class="upload-zone" style="margin-top:12px;">
+                    <div style="font-size:36px;">⬆️</div>
+                    <div style="font-weight:700;">Drop your document</div>
+                    <div class="muted">Deskew, denoise, detect tables, OCR, export.</div>
+                    <input id="fileInput" type="file" accept="image/*,.pdf" style="display:none;" />
+                </div>
+                <div id="previewBlock" class="hidden" style="margin-top:12px; display:grid; gap:8px;">
+                    <img id="previewImg" class="thumb" alt="preview" />
+                    <div class="muted" id="fileMeta"></div>
+                    <div class="tags" id="stageTags"></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button class="btn-primary" id="extractBtn" disabled>Start Extraction</button>
+                    <button class="btn-ghost" id="resetBtn">Reset</button>
+                </div>
+                <div id="errorBox" class="hidden" style="margin-top:10px; color:var(--error); font-weight:600;"></div>
+            </div>
+
+            <div class="card">
+                <div class="pill">Status</div>
+                <h3 style="margin-top:8px;">System Snapshot</h3>
+                <div class="stat-row">
+                    <div class="stat"><label>Tables Found</label><strong id="statTables">0</strong></div>
+                    <div class="stat"><label>Cells Extracted</label><strong id="statCells">0</strong></div>
+                    <div class="stat"><label>Process Time</label><strong id="statTime">0s</strong></div>
+                </div>
+                <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;" id="healthRow">
+                    <div class="status-badge status-warn">Detector • unknown</div>
+                    <div class="status-badge status-warn">Structure • unknown</div>
+                    <div class="status-badge status-warn">OCR • unknown</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                <div>
+                    <div class="pill">Pipeline</div>
+                    <h3 style="margin-top:8px;">Stages</h3>
+                </div>
+                <div class="muted" id="jobId"></div>
+            </div>
+            <div class="timeline" id="timeline">
+                <div class="stage"><div class="label">Preprocess</div><div class="status">Pending</div></div>
+                <div class="stage"><div class="label">Detect Tables</div><div class="status">Pending</div></div>
+                <div class="stage"><div class="label">Structure</div><div class="status">Pending</div></div>
+                <div class="stage"><div class="label">OCR</div><div class="status">Pending</div></div>
+                <div class="stage"><div class="label">Export</div><div class="status">Ready</div></div>
+            </div>
+        </section>
+
+        <section class="card" style="margin-top:16px;">
+            <div class="pill">Visualization</div>
+            <h3 style="margin-top:8px;">Detection + Structure</h3>
+            <div class="viewer" style="margin-top:10px;">
+                <div class="panel">
+                    <h4>Page Preview</h4>
+                    <p class="muted" style="margin-top:4px;">Upload an image/PDF page to see preview here.</p>
+                    <img id="viewerImg" class="thumb hidden" alt="viewer" />
+                </div>
+                <div class="panel">
+                    <h4>Detected Tables</h4>
+                    <p class="muted" style="margin-top:4px;">Bounding boxes list</p>
+                    <div id="bboxList" style="font-size:13px; display:grid; gap:4px; margin-top:6px;"></div>
+                </div>
+                <div class="panel">
+                    <h4>Structure Grid</h4>
+                    <p class="muted" style="margin-top:4px;">Rows/columns/merged cells summary.</p>
+                    <div id="structureInfo" style="font-size:13px; display:grid; gap:4px; margin-top:6px;"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card" style="margin-top:16px;">
+            <div class="pill">Results</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                <h3>OCR Output</h3>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-ghost" id="csvBtn" disabled>Export CSV</button>
+                    <button class="btn-ghost" id="jsonBtn" disabled>Export JSON</button>
+                    <button class="btn-ghost" id="xlsxBtn" disabled>Export Excel</button>
+                </div>
+            </div>
+            <div class="tabs" style="margin-top:10px;">
+                <button class="tab active" data-tab="tableTab">Table View</button>
+                <button class="tab" data-tab="jsonTab">JSON</button>
+            </div>
+            <div id="tableTab" class="tab-panel" style="margin-top:10px;">
+                <div class="table-wrap">
+                    <table id="resultTable"></table>
+                </div>
+            </div>
+            <div id="jsonTab" class="tab-panel hidden" style="margin-top:10px;">
+                <div class="json-view" id="jsonView">Upload a file to see JSON output.</div>
+            </div>
+        </section>
+
+        <section class="card" style="margin-top:16px;">
+            <div class="pill">Analytics</div>
+            <h3 style="margin-top:8px;">Quick Stats</h3>
+            <div class="split" style="margin-top:8px;">
+                <div class="stage">
+                    <div class="label">Total Jobs (session)</div>
+                    <div class="status" id="statJobs">0</div>
+                </div>
+                <div class="stage">
+                    <div class="label">Feedback Collected</div>
+                    <div class="status" id="statFeedback">0</div>
+                </div>
+                <div class="stage">
+                    <div class="label">Uptime (s)</div>
+                    <div class="status" id="statUptime">0</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadZone = document.getElementById('uploadZone');
+        const previewBlock = document.getElementById('previewBlock');
+        const previewImg = document.getElementById('previewImg');
+        const fileMeta = document.getElementById('fileMeta');
+        const stageTags = document.getElementById('stageTags');
+        const viewerImg = document.getElementById('viewerImg');
+        const bboxList = document.getElementById('bboxList');
+        const structureInfo = document.getElementById('structureInfo');
+        const extractBtn = document.getElementById('extractBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const startBtn = document.getElementById('startBtn');
+        const healthBtn = document.getElementById('healthBtn');
+        const errorBox = document.getElementById('errorBox');
+        const jobIdEl = document.getElementById('jobId');
+        const statTables = document.getElementById('statTables');
+        const statCells = document.getElementById('statCells');
+        const statTime = document.getElementById('statTime');
+        const healthRow = document.getElementById('healthRow');
+        const resultTable = document.getElementById('resultTable');
+        const jsonView = document.getElementById('jsonView');
+        const csvBtn = document.getElementById('csvBtn');
+        const jsonBtn = document.getElementById('jsonBtn');
+        const xlsxBtn = document.getElementById('xlsxBtn');
+        const statJobs = document.getElementById('statJobs');
+        const statFeedback = document.getElementById('statFeedback');
+        const statUptime = document.getElementById('statUptime');
+        const tabs = document.querySelectorAll('.tab');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+        const timeline = document.getElementById('timeline');
+
+        let currentFile = null;
+        let lastJobId = null;
+
+        const formatBytes = (bytes) => {
+            if (!bytes) return '0 B';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+        };
+
+        function setTimeline(statuses) {
+            const labels = ['Preprocess', 'Detect Tables', 'Structure', 'OCR', 'Export'];
+            timeline.innerHTML = '';
+            labels.forEach((label, idx) => {
+                const st = statuses[idx] || 'Pending';
+                timeline.innerHTML += `<div class="stage"><div class="label">${label}</div><div class="status">${st}</div></div>`;
+            });
+        }
+
+        function setHealth(models) {
+            healthRow.innerHTML = '';
+            const entries = [
+                ['Detector', models?.detector],
+                ['Structure', models?.structure],
+                ['OCR', models?.ocr],
+            ];
+            entries.forEach(([name, ok]) => {
+                const cls = ok ? 'status-ok' : 'status-warn';
+                const text = ok ? 'ok' : 'not loaded';
+                const div = document.createElement('div');
+                div.className = `status-badge ${cls}`;
+                div.textContent = `${name} • ${text}`;
+                healthRow.appendChild(div);
+            });
+        }
+
+        async function checkHealth() {
+            try {
+                const res = await fetch('/api/v1/health');
+                const data = await res.json();
+                setHealth(data.models_loaded);
+                statUptime.textContent = Math.round(data.uptime_seconds || 0);
+            } catch (err) {
+                setHealth({ detector: false, structure: false, ocr: false });
+            }
+        }
+
+        function reset() {
+            currentFile = null;
+            lastJobId = null;
+            extractBtn.disabled = true;
+            csvBtn.disabled = true; jsonBtn.disabled = true; xlsxBtn.disabled = true;
+            previewBlock.classList.add('hidden');
+            viewerImg.classList.add('hidden');
+            previewImg.src = '';
+            viewerImg.src = '';
+            fileMeta.textContent = '';
+            stageTags.innerHTML = '';
+            bboxList.innerHTML = '';
+            structureInfo.innerHTML = '';
+            resultTable.innerHTML = '';
+            jsonView.textContent = 'Upload a file to see JSON output.';
+            jobIdEl.textContent = '';
+            statTables.textContent = '0';
+            statCells.textContent = '0';
+            statTime.textContent = '0s';
+            setTimeline([]);
+            errorBox.classList.add('hidden');
+        }
+
+        function renderTable(table) {
+            if (!table) { resultTable.innerHTML = '<tr><td>No data</td></tr>'; return; }
+            const rows = table.rows || 0; const cols = table.cols || 0;
+            const grid = Array.from({ length: rows }, () => Array(cols).fill(''));
+            (table.cells || []).forEach(c => {
+                if (c.row < rows && c.col < cols) grid[c.row][c.col] = c.text || '';
+            });
+            let html = '<thead><tr>' + Array.from({ length: cols }, (_, i) => `<th>Col ${i+1}</th>`).join('') + '</tr></thead><tbody>';
+            grid.forEach(r => { html += '<tr>' + r.map(v => `<td>${v || ''}</td>`).join('') + '</tr>'; });
+            html += '</tbody>';
+            resultTable.innerHTML = html;
+        }
+
+        async function extract() {
+            if (!currentFile) return;
+            errorBox.classList.add('hidden');
+            setTimeline(['Running', 'Pending', 'Pending', 'Pending', 'Pending']);
+            const form = new FormData();
+            form.append('file', currentFile);
+            try {
+                const res = await fetch('/api/v1/extract', { method: 'POST', body: form });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                lastJobId = data.job_id;
+                jobIdEl.textContent = `Job: ${data.job_id}`;
+                statTables.textContent = data.num_tables || 0;
+                statCells.textContent = (data.tables?.[0]?.cells?.length) || 0;
+                statTime.textContent = `${(data.processing_time || 0).toFixed(2)}s`;
+                setTimeline(['Done', 'Done', 'Done', 'Done', 'Ready']);
+                renderTable(data.tables?.[0]);
+                jsonView.textContent = JSON.stringify(data, null, 2);
+                csvBtn.disabled = jsonBtn.disabled = xlsxBtn.disabled = false;
+                bboxList.innerHTML = '';
+                (data.tables || []).forEach((t, idx) => {
+                    const div = document.createElement('div');
+                    div.textContent = `Table ${idx+1}: bbox ${t.bbox ? t.bbox.join(', ') : 'n/a'}`;
+                    bboxList.appendChild(div);
+                });
+                structureInfo.innerHTML = '';
+                if (data.tables && data.tables[0]) {
+                    const t = data.tables[0];
+                    structureInfo.innerHTML = `Rows: ${t.rows}, Cols: ${t.cols}<br/>Cells: ${t.cells?.length || 0}`;
+                }
+            } catch (err) {
+                errorBox.textContent = 'Extraction failed: ' + err.message;
+                errorBox.classList.remove('hidden');
+                setTimeline(['Error', 'Error', 'Error', 'Error', 'Error']);
+            }
+        }
+
+        function onFileSelected(file) {
+            currentFile = file;
+            extractBtn.disabled = false;
+            previewBlock.classList.remove('hidden');
+            stageTags.innerHTML = '<span class="pill">Ready</span>';
+            fileMeta.textContent = `${file.name} • ${formatBytes(file.size)}`;
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => { previewImg.src = e.target.result; viewerImg.src = e.target.result; viewerImg.classList.remove('hidden'); };
+                reader.readAsDataURL(file);
+            } else {
+                previewImg.src = '';
+                previewImg.alt = 'PDF uploaded';
+                viewerImg.classList.add('hidden');
+            }
+        }
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('drag'); });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault(); uploadZone.classList.remove('drag');
+            const file = e.dataTransfer.files?.[0];
+            if (file) onFileSelected(file);
+        });
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) onFileSelected(file);
+        });
+
+        extractBtn.addEventListener('click', extract);
+        startBtn.addEventListener('click', extract);
+        resetBtn.addEventListener('click', () => { reset(); fileInput.value = ''; });
+        healthBtn.addEventListener('click', checkHealth);
+
+        tabs.forEach(tab => tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            tabPanels.forEach(p => p.classList.add('hidden'));
+            document.getElementById(tab.dataset.tab).classList.remove('hidden');
+        }));
+
+        const exportClick = (format) => {
+            if (!lastJobId) return;
+            window.open(`/api/v1/export/${lastJobId}?format=${format}`, '_blank');
+        };
+        csvBtn.addEventListener('click', () => exportClick('csv'));
+        jsonBtn.addEventListener('click', () => exportClick('json'));
+        xlsxBtn.addEventListener('click', () => exportClick('excel'));
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/v1/stats');
+                const data = await res.json();
+                statJobs.textContent = data.total_jobs ?? 0;
+                statFeedback.textContent = data.total_feedback ?? 0;
+                statUptime.textContent = Math.round(data.uptime_seconds || 0);
+            } catch (err) {
+                // ignore
+            }
+        }
+
+        reset();
+        checkHealth();
+        loadStats();
+    </script>
+</body>
+</html>
+        
+        // Drag and drop handlers
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            currentFile = file;
+            
+            // Show preview
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewImage.style.display = 'none';
+            }
+            
+            uploadArea.style.display = 'none';
+            previewContainer.style.display = 'block';
+            hideError();
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        async function extractTable() {
+            if (!currentFile) return;
+            
+            const extractBtn = document.getElementById('extractBtn');
+            extractBtn.disabled = true;
+            
+            document.getElementById('uploadCard').style.display = 'none';
+            document.getElementById('loadingCard').style.display = 'block';
+            document.getElementById('resultsCard').style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', currentFile);
+                
+                const response = await fetch('/api/v1/extract?languages=ko,en', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Extraction failed');
+                }
+                
+                extractionResult = await response.json();
+                currentJobId = extractionResult.job_id;
+                
+                displayResults(extractionResult);
+                
+            } catch (error) {
+                showError(error.message);
+                document.getElementById('uploadCard').style.display = 'block';
+                previewContainer.style.display = 'block';
+                uploadArea.style.display = 'none';
+            } finally {
+                document.getElementById('loadingCard').style.display = 'none';
+                extractBtn.disabled = false;
+            }
+        }
+        
+        function displayResults(result) {
+            document.getElementById('resultsCard').style.display = 'block';
+            
+            // Update stats
+            const tables = result.tables || [];
+            let totalCells = 0;
+            tables.forEach(t => {
+                totalCells += (t.cells || []).length;
+            });
+            
+            document.getElementById('tableCount').textContent = tables.length;
+            document.getElementById('cellCount').textContent = totalCells;
+            document.getElementById('processTime').textContent = (result.processing_time || 0).toFixed(2) + 's';
+            
+            // Build table HTML
+            const tableContainer = document.getElementById('tableContainer');
+            
+            if (tables.length === 0) {
+                tableContainer.innerHTML = '<p style="color: #666; text-align: center; padding: 40px;">No tables detected in this image.</p>';
+            } else {
+                let html = '';
+                tables.forEach((table, idx) => {
+                    html += `<h3 style="margin: 20px 0 10px;">Table ${idx + 1}</h3>`;
+                    html += buildTableHTML(table);
+                });
+                tableContainer.innerHTML = html;
+            }
+            
+            // Raw text
+            let rawText = '';
+            tables.forEach((table, idx) => {
+                rawText += `=== Table ${idx + 1} ===\n`;
+                (table.cells || []).forEach(cell => {
+                    rawText += `[${cell.row},${cell.col}] ${cell.text || ''}\n`;
+                });
+                rawText += '\n';
+            });
+            document.getElementById('rawText').textContent = rawText || 'No text extracted';
+            
+            // JSON
+            document.getElementById('jsonText').textContent = JSON.stringify(result, null, 2);
+        }
+        
+        function buildTableHTML(table) {
+            const cells = table.cells || [];
+            if (cells.length === 0) return '<p>Empty table</p>';
+            
+            // Find dimensions
+            let maxRow = 0, maxCol = 0;
+            cells.forEach(cell => {
+                maxRow = Math.max(maxRow, cell.row);
+                maxCol = Math.max(maxCol, cell.col);
+            });
+            
+            // Build grid
+            const grid = [];
+            for (let r = 0; r <= maxRow; r++) {
+                grid[r] = [];
+                for (let c = 0; c <= maxCol; c++) {
+                    grid[r][c] = '';
+                }
+            }
+            
+            cells.forEach(cell => {
+                if (cell.row <= maxRow && cell.col <= maxCol) {
+                    grid[cell.row][cell.col] = cell.text || '';
+                }
+            });
+            
+            // Generate HTML
+            let html = '<table class="extracted-table">';
+            grid.forEach((row, rowIdx) => {
+                html += '<tr>';
+                row.forEach((cell, colIdx) => {
+                    const tag = rowIdx === 0 ? 'th' : 'td';
+                    html += `<${tag}>${escapeHtml(cell)}</${tag}>`;
+                });
+                html += '</tr>';
+            });
+            html += '</table>';
+            
+            return html;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tab + 'Tab').classList.add('active');
+        }
+        
+        async function exportAs(format) {
+            if (!currentJobId) return;
+            
+            try {
+                // Export all tables, not just table 0
+                const response = await fetch(`/api/v1/export/${currentJobId}?format=${format}&all_tables=true`);
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Export failed');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `table_export.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                
+            } catch (error) {
+                alert('Export failed: ' + error.message);
+            }
+        }
+        
+        function resetUpload() {
+            currentFile = null;
+            currentJobId = null;
+            extractionResult = null;
+            
+            fileInput.value = '';
+            previewImage.src = '';
+            previewContainer.style.display = 'none';
+            uploadArea.style.display = 'block';
+            
+            document.getElementById('uploadCard').style.display = 'block';
+            document.getElementById('loadingCard').style.display = 'none';
+            document.getElementById('resultsCard').style.display = 'none';
+            
+            hideError();
+        }
+        
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = '❌ ' + message;
+            errorEl.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
