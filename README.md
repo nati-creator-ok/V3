@@ -1,4 +1,4 @@
-# AI OCR-based Automatic Table Extraction System
+# Byte-sized: AI OCR-based Automatic Table Extraction System
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,12 +8,15 @@ A production-ready AI system that automatically detects and extracts tabular dat
 ## 🌟 Features
 
 - **Multi-format Support**: Process images (PNG, JPG, TIFF) and PDF documents
-- **Table Detection**: YOLOv8-based detection for accurate table localization
-- **Structure Recognition**: Transformer-based model for cell detection and span recognition
+- **Table Detection**: Microsoft Table Transformer (HF) for robust table localization
+- **Structure Recognition**: Microsoft Table Transformer structure head for cells/merges
 - **Multi-language OCR**: Korean, English, and mixed-language text extraction
 - **Merged Cell Handling**: Automatic detection of rowspan/colspan
 - **Export Formats**: CSV, JSON, Excel, HTML output
 - **REST API**: FastAPI-based API for easy integration
+- **Chat over Tables**: Built-in chatbot endpoint `/api/v1/chat` to query extracted tables
+- **Export All Tables**: CSV/HTML/JSON/Excel including multiple tables (multi-sheet Excel)
+- **Model Preloading**: Startup warm-cache for HF models and EasyOCR for instant responses
 - **Docker Support**: Production-ready containerized deployment
 
 ## 📋 Table of Contents
@@ -50,8 +53,8 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Download model weights (if available)
-# python scripts/download_weights.py
+# (Optional) Pre-download model caches for faster startup
+python scripts/download_models_fast.py
 ```
 
 ### Using Docker
@@ -123,6 +126,7 @@ curl "http://localhost:8000/api/v1/export/{job_id}?format=csv" -o table.csv
 | `GET` | `/api/v1/extract/{job_id}` | Get extraction result |
 | `POST` | `/api/v1/batch` | Batch extraction for multiple files |
 | `GET` | `/api/v1/export/{job_id}` | Export result in specified format |
+| `POST` | `/api/v1/chat` | Ask questions about the extracted tables |
 | `POST` | `/api/v1/feedback` | Submit correction feedback |
 | `GET` | `/api/v1/health` | Health check |
 
@@ -168,18 +172,18 @@ Input Document
          │
          ▼
 ┌─────────────────┐
-│ Table Detection │  ← YOLOv8 / Faster R-CNN
+│ Table Detection │  ← Microsoft Table Transformer (detection)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   Structure     │  ← Transformer-based encoder-decoder
+│   Structure     │  ← Microsoft Table Transformer (structure)
 │  Recognition    │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   OCR Engine    │  ← EasyOCR / Tesseract (Korean + English)
+│   OCR Engine    │  ← EasyOCR / PaddleOCR (Korean + English)
 └────────┬────────┘
          │
          ▼
@@ -196,11 +200,12 @@ Input Document
 | Module | Description |
 |--------|-------------|
 | `src/preprocessing/` | Image preprocessing (deskew, denoise, binarization) |
-| `src/detection/` | Table region detection using YOLO/Detectron2 |
-| `src/structure/` | Table structure recognition (cells, rows, columns) |
+| `src/detection/` | Table region detection with Table Transformer + fallbacks |
+| `src/structure/` | Table structure recognition (HF structure head; OCR fallback) |
 | `src/ocr/` | OCR engines (EasyOCR, Tesseract, PaddleOCR) |
 | `src/api/` | FastAPI REST API |
 | `src/evaluation/` | Evaluation metrics (Cell-F1, TEDS, CER/WER) |
+| `src/api/static/` | Enterprise UI with Byte-sized branding + chatbot |
 
 ## ⚙️ Configuration
 
@@ -348,7 +353,21 @@ V3/
 - [ ] Week 3-6: Table detection and baseline OCR
 - [ ] Week 6-8: Structure recognition model
 - [ ] Week 8-10: Optimization and evaluation
-- [ ] Week 10-12: Web UI, API, and deployment
+- [ ] Week 10-12: Web UI, Chatbot, API, and deployment
+
+## 🧭 How to Use the Chatbot
+
+1. Start the API: `uvicorn src.api.app:app --host 127.0.0.1 --port 8000 --reload`
+2. Open the UI: http://127.0.0.1:8000
+3. Upload an image/PDF and run extraction.
+4. In the Visualization section, use the Chatbot panel to ask questions.
+5. Optional: run a local LLM for better answers via Ollama:
+
+```bash
+ollama pull llama3.1
+```
+
+If Ollama isn’t available, the system returns a lightweight fallback answer with table context.
 
 ## 📄 License
 

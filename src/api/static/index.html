@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Table Extraction</title>
+    <title>Byte-sized | Table Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -89,18 +89,35 @@
     <div class="shell">
         <header>
             <div class="brand">
-                <div class="logo">AI</div>
+                <div class="logo">B</div>
                 <div>
-                    <div class="title">Table Extraction Studio</div>
-                    <div class="subtitle">Korean + English • Structure + OCR • Exports</div>
+                    <div class="title">Byte-sized • Table Intelligence</div>
+                    <div class="subtitle">Detect • Structure • OCR • Export • Chat</div>
                 </div>
             </div>
             <div class="actions">
                 <a class="btn-link muted" href="/docs" target="_blank">API Docs</a>
-                <button class="btn-ghost" id="healthBtn">Check Health</button>
+                <button class="btn-ghost" id="loginNavBtn">Login</button>
+                <button class="btn-ghost" id="healthBtn">Health</button>
                 <button class="btn-primary" id="startBtn">Run Extraction</button>
             </div>
         </header>
+
+        <!-- Login panel (client-side only) -->
+        <section id="loginCard" class="card hidden">
+            <div class="pill">Login</div>
+            <h3 style="margin-top:8px;">Sign in to Byte-sized</h3>
+            <div class="panel" style="max-width:420px;">
+                <div style="display:grid; gap:10px;">
+                    <label>Email</label>
+                    <input id="loginEmail" type="email" placeholder="you@company.com"/>
+                    <label>Password</label>
+                    <input id="loginPass" type="password" placeholder="••••••••"/>
+                    <button id="loginBtn" class="btn-primary">Sign in</button>
+                    <div class="muted" id="loginMsg"></div>
+                </div>
+            </div>
+        </section>
 
         <section class="grid hero">
             <div class="card">
@@ -177,6 +194,18 @@
                     <p class="muted" style="margin-top:4px;">Rows/columns/merged cells summary.</p>
                     <div id="structureInfo" style="font-size:13px; display:grid; gap:4px; margin-top:6px;"></div>
                 </div>
+                <div class="panel">
+                    <h4>Chatbot</h4>
+                    <p class="muted" style="margin-top:4px;">Ask about detected tables and structure.</p>
+                    <label class="muted">Question</label>
+                    <textarea id="chatInput" rows="3" placeholder="e.g., What is the total in column 3?" style="width:100%;"></textarea>
+                    <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                        <button class="btn-primary" id="chatSendBtn" disabled>Ask</button>
+                        <span id="chatStatus" class="muted"></span>
+                    </div>
+                    <label class="muted" style="margin-top:10px; display:block;">Answer</label>
+                    <div id="chatAnswer" class="muted" style="min-height:72px; white-space:pre-wrap;"></div>
+                </div>
             </div>
         </section>
 
@@ -238,6 +267,12 @@
         const resetBtn = document.getElementById('resetBtn');
         const startBtn = document.getElementById('startBtn');
         const healthBtn = document.getElementById('healthBtn');
+        const loginNavBtn = document.getElementById('loginNavBtn');
+        const loginCard = document.getElementById('loginCard');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginEmail = document.getElementById('loginEmail');
+        const loginPass = document.getElementById('loginPass');
+        const loginMsg = document.getElementById('loginMsg');
         const errorBox = document.getElementById('errorBox');
         const jobIdEl = document.getElementById('jobId');
         const statTables = document.getElementById('statTables');
@@ -249,6 +284,10 @@
         const csvBtn = document.getElementById('csvBtn');
         const jsonBtn = document.getElementById('jsonBtn');
         const xlsxBtn = document.getElementById('xlsxBtn');
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        const chatAnswer = document.getElementById('chatAnswer');
+        const chatStatus = document.getElementById('chatStatus');
         const statJobs = document.getElementById('statJobs');
         const statFeedback = document.getElementById('statFeedback');
         const statUptime = document.getElementById('statUptime');
@@ -358,6 +397,7 @@
                 renderTable(data.tables?.[0]);
                 jsonView.textContent = JSON.stringify(data, null, 2);
                 csvBtn.disabled = jsonBtn.disabled = xlsxBtn.disabled = false;
+                chatSendBtn && (chatSendBtn.disabled = false);
                 bboxList.innerHTML = '';
                 (data.tables || []).forEach((t, idx) => {
                     const div = document.createElement('div');
@@ -410,6 +450,21 @@
         startBtn.addEventListener('click', extract);
         resetBtn.addEventListener('click', () => { reset(); fileInput.value = ''; });
         healthBtn.addEventListener('click', checkHealth);
+        if (loginNavBtn) {
+            loginNavBtn.addEventListener('click', () => {
+                loginCard.classList.toggle('hidden');
+                if (!loginCard.classList.contains('hidden')) loginEmail?.focus();
+            });
+        }
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                const email = (loginEmail?.value || '').trim();
+                const pass = (loginPass?.value || '').trim();
+                if (!email || !pass) { loginMsg.textContent = 'Enter email and password'; return; }
+                loginMsg.textContent = 'Signed in (demo only)';
+                setTimeout(() => { loginCard.classList.add('hidden'); }, 800);
+            });
+        }
 
         tabs.forEach(tab => tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
@@ -425,6 +480,35 @@
         csvBtn.addEventListener('click', () => exportClick('csv'));
         jsonBtn.addEventListener('click', () => exportClick('json'));
         xlsxBtn.addEventListener('click', () => exportClick('excel'));
+
+        // Chat interactions
+        if (chatSendBtn) {
+            chatSendBtn.addEventListener('click', async () => {
+                if (!lastJobId) return;
+                const question = (chatInput?.value || '').trim();
+                if (!question) return;
+                if (chatStatus) chatStatus.textContent = 'Thinking…';
+                if (chatAnswer) chatAnswer.textContent = '';
+                try {
+                    const res = await fetch('/api/v1/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job_id: lastJobId, question })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({ detail: 'Chat failed' }));
+                        throw new Error(err.detail || 'Chat failed');
+                    }
+                    const data = await res.json();
+                    if (chatAnswer) chatAnswer.textContent = data.answer || '(No answer)';
+                    if (chatStatus) chatStatus.textContent = data.citations && data.citations.length ?
+                        `Used tables: ${data.citations.map(c => c.table_index + 1).join(', ')}` : '';
+                } catch (e) {
+                    if (chatStatus) chatStatus.textContent = '';
+                    if (chatAnswer) chatAnswer.textContent = 'Error: ' + e.message;
+                }
+            });
+        }
 
         async function loadStats() {
             try {
